@@ -2,6 +2,10 @@ from flask import Flask, jsonify, request, make_response
 from flask_restful import Api, Resource
 from pymongo import MongoClient
 from flask_bcrypt import Bcrypt
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 api = Api(app)
@@ -21,7 +25,7 @@ class DatabaseManager:
             )
             return True
         except Exception as e:
-            print(f"Error inserting user: {e}")
+            logger.error(f"Error inserting user: {e}")
             return False
 
     def find_user_by_username(self, username: str):
@@ -66,7 +70,7 @@ class UserLogin(Resource):
                     jsonify({"message": "missing user or password"}), 400
                 )
         except Exception as e:
-            print(f"Error: {e}")
+            logger.error(f"Error: {e}")
             return make_response(jsonify({"message": "something went wrong"}), 500)
 
 
@@ -109,7 +113,7 @@ class UserRegister(Resource):
                 )
 
         except Exception as e:
-            print(f"Error: {e}")
+            logger.error(f"Error: {e}")
             return make_response(jsonify({"message": "something went wrong"}), 500)
 
 
