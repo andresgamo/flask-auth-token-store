@@ -2,12 +2,17 @@ from flask import Flask, jsonify, request, make_response
 from flask_restful import Api, Resource
 from pymongo import MongoClient
 from flask_bcrypt import Bcrypt
+from typing import Union, Dict, Any
+import jwt
+import os
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+SECRET_KEY = os.environ.get("SECRET_KEY")
+app.config["SECRET_KEY"] = SECRET_KEY
 api = Api(app)
 bcrypt = Bcrypt(app)
 
@@ -28,7 +33,7 @@ class DatabaseManager:
             logger.error(f"Error inserting user: {e}")
             return False
 
-    def find_user_by_username(self, username: str):
+    def find_user_by_username(self, username: str) -> Dict[str, Any]:
         return self.users_collection.find_one({"username": username})
 
 
@@ -41,11 +46,14 @@ class DataValidation:
         """Validates user and password have been sent"""
         return bool(data.get("username")) and bool(data.get("password"))
 
-    def verify_password(self, username: str, password: str) -> bool:
+    def verify_password(self, user, password: str) -> bool:
         """Verify if the provided password matches the stored hash"""
+        return self.bcrypt.check_password_hash(user.get("password"), password)
+
+    def check_login(self, username: str, password: str) -> Union[Dict[str, Any], bool]:
         user = self.db_manager.find_user_by_username(username)
-        if user:
-            return self.bcrypt.check_password_hash(user.get("password"), password)
+        if user and self.verify_password(user, password):
+            return user
         return False
 
 
@@ -59,8 +67,16 @@ class UserLogin(Resource):
             if self.data_validation.data_complete(data):
                 username = data.get("username")
                 password = data.get("password")
-                if self.data_validation.verify_password(username, password):
-                    return make_response(jsonify({"message": "access granted"}), 200)
+                user = self.data_validation.check_login(username, password)
+                if user:
+                    user["token"] = jwt.encode(
+                        {"username": user["username"]},
+                        app.config["SECRET_KEY"],
+                        algorithm="HS256",
+                    )
+                    return make_response(
+                        jsonify({"message": "access granted", "user": user}), 200
+                    )
                 else:
                     return make_response(
                         jsonify({"message": "wrong username or password"}), 401
