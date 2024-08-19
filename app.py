@@ -1,11 +1,12 @@
-from flask import Flask, jsonify, request, make_response
-from flask_restful import Api, Resource
-from pymongo import MongoClient
-from flask_bcrypt import Bcrypt
-from typing import Union, Dict, Any
-import jwt
 import os
 import logging
+from flask import Flask, jsonify, request, make_response
+from flask_restful import Api, Resource
+import jwt
+from flask_bcrypt import Bcrypt
+from data_validation import DataValidation
+from db_manager import DatabaseManager
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,46 +16,6 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 app.config["SECRET_KEY"] = SECRET_KEY
 api = Api(app)
 bcrypt = Bcrypt(app)
-
-
-class DatabaseManager:
-    def __init__(self) -> None:
-        self.client = MongoClient("mongodb://mongo:27017")
-        self.db = self.client["molidb"]
-        self.users_collection = self.db["users"]
-
-    def insert_user(self, username, hashed_password) -> bool:
-        try:
-            self.users_collection.insert_one(
-                {"username": username, "password": hashed_password, "token": 10}
-            )
-            return True
-        except Exception as e:
-            logger.error(f"Error inserting user: {e}")
-            return False
-
-    def find_user_by_username(self, username: str) -> Dict[str, Any]:
-        return self.users_collection.find_one({"username": username})
-
-
-class DataValidation:
-    def __init__(self, db_manager: DatabaseManager, bcrypt: Bcrypt):
-        self.db_manager = db_manager
-        self.bcrypt = bcrypt
-
-    def data_complete(self, data: dict) -> bool:
-        """Validates user and password have been sent"""
-        return bool(data.get("username")) and bool(data.get("password"))
-
-    def verify_password(self, user, password: str) -> bool:
-        """Verify if the provided password matches the stored hash"""
-        return self.bcrypt.check_password_hash(user.get("password"), password)
-
-    def check_login(self, username: str, password: str) -> Union[Dict[str, Any], bool]:
-        user = self.db_manager.find_user_by_username(username)
-        if user and self.verify_password(user, password):
-            return user
-        return False
 
 
 class UserLogin(Resource):
@@ -86,7 +47,7 @@ class UserLogin(Resource):
                     jsonify({"message": "missing user or password"}), 400
                 )
         except Exception as e:
-            logger.error(f"Error: {e}")
+            logger.error("Error: %s", e)
             return make_response(jsonify({"message": "something went wrong"}), 500)
 
 
@@ -129,7 +90,7 @@ class UserRegister(Resource):
                 )
 
         except Exception as e:
-            logger.error(f"Error: {e}")
+            logger.error("Error: %s", e)
             return make_response(jsonify({"message": "something went wrong"}), 500)
 
 
