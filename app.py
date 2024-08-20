@@ -8,6 +8,7 @@ from flask_bcrypt import Bcrypt
 from data_validation import DataValidation
 from db_manager import DatabaseManager
 from auth_middelware import token_required
+from utility import serialize_document
 
 
 logging.basicConfig(level=logging.INFO)
@@ -23,11 +24,13 @@ bcrypt = Bcrypt(app)
 class Upload(Resource):
     ALLOWED_EXTENSIONS = {"txt", "pdf", "png", "jpg", "jpeg", "gif"}
 
+    def __init__(self, db_manager: DatabaseManager) -> None:
+        self.db_manager = db_manager
+
     @token_required
     def post(self):
-        data = request.get_json()
-        if "file" in request.files and "username" in data:
-            current_user = data["username"]
+        if "file" in request.files and "username" in request.form:
+            current_user = request.form["username"]
             file = request.files["file"]
             if file.filename == "":
                 return make_response(jsonify({"message": "no file submitted"}), 401)
@@ -82,6 +85,7 @@ class UserLogin(Resource):
                         app.config["SECRET_KEY"],
                         algorithm="HS256",
                     )
+                    user = serialize_document(user)
                     return make_response(
                         jsonify({"message": "access granted", "user": user}), 200
                     )

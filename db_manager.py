@@ -1,3 +1,4 @@
+import os
 import logging
 from typing import Dict, Any, Union
 from pymongo import MongoClient
@@ -13,12 +14,12 @@ class DatabaseManager:
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super().__new__(cls, *args, **kwargs)
-            cls._instance._initialize()
         return cls._instance
 
     def __init__(self):
         if not hasattr(self, "initialized"):
-            self.client = MongoClient("mongodb://mongo:27017")
+            mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/molidb")
+            self.client = MongoClient(mongo_uri)
             self.db = self.client["molidb"]
             self.users_collection = self.db["users"]
             self.uploads_collection = self.db["uploads"]

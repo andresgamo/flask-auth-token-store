@@ -27,7 +27,7 @@ def token_required(func):
             )
         try:
             data = jwt.decode(
-                token, current_app.config["SECRET_KEY"], algorithm="HS256"
+                token, current_app.config["SECRET_KEY"], algorithms="HS256"
             )
             current_user = DR.get("db_manager").find_user_by_username(data["username"])
             if current_user:

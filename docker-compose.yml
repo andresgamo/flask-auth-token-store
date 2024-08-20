@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  db:
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - app-network
+
+  web:
+    build:
+      context: .
+    container_name: flask_app 
+    ports:
+      - "8000:8000"
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+      - MONGO_URI=mongodb://db:27017/molidb 
+      - SECRET_KEY=Es secreto, shhh
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+volumes:
+  mongo_data:
+
+networks:
+  app-network:
+    driver: bridge
