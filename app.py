@@ -2,10 +2,12 @@ import os
 import logging
 from flask import Flask, jsonify, request, make_response
 from flask_restful import Api, Resource
+from werkzeug.utils import secure_filename
 import jwt
 from flask_bcrypt import Bcrypt
 from data_validation import DataValidation
 from db_manager import DatabaseManager
+from auth_middelware import token_required
 
 
 logging.basicConfig(level=logging.INFO)
@@ -16,6 +18,51 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 app.config["SECRET_KEY"] = SECRET_KEY
 api = Api(app)
 bcrypt = Bcrypt(app)
+
+
+class Upload(Resource):
+    ALLOWED_EXTENSIONS = {"txt", "pdf", "png", "jpg", "jpeg", "gif"}
+
+    @token_required
+    def post(self):
+        data = request.get_json()
+        if "file" in request.files and "username" in data:
+            current_user = data["username"]
+            file = request.files["file"]
+            if file.filename == "":
+                return make_response(jsonify({"message": "no file submitted"}), 401)
+            if self.allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                file_data = file.read()
+                file_document = {
+                    "filename": filename,
+                    "file_data": file_data,
+                    "content_type": file.content_type,
+                }
+                upload_id = db_manager.upload_file(file_document)
+                if upload_id:
+                    if db_manager.add_file_id(current_user, upload_id):
+                        logger.info("Upload successfully")
+                        return make_response(
+                            jsonify({"message": "Upload successfully"}), 201
+                        )
+                    logger.error("User not found or upload_id could not be added.")
+                    return make_response(
+                        jsonify(
+                            {
+                                "message": "User not found or upload_id could not be added."
+                            }
+                        ),
+                        401,
+                    )
+        return make_response(jsonify({"message": "no file part"}), 401)
+
+    @staticmethod
+    def allowed_file(filename: str) -> bool:
+        return (
+            "." in filename
+            and filename.rsplit(".", 1)[1].lower() in Upload.ALLOWED_EXTENSIONS
+        )
 
 
 class UserLogin(Resource):
@@ -98,6 +145,7 @@ db_manager = DatabaseManager()
 data_validation = DataValidation(db_manager, bcrypt)
 api.add_resource(UserRegister, "/register", resource_class_args=(data_validation,))
 api.add_resource(UserLogin, "/login", resource_class_args=(data_validation,))
+api.add_resource(Upload, "/upload", resource_class_args=(db_manager,))
 
 
 if "__main__" == __name__:
