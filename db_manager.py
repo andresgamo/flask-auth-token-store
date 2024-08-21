@@ -35,7 +35,7 @@ class DatabaseManager:
             logger.error("Error inserting user: %s", e)
             return False
 
-    def find_user_by_username(self, username: str) -> Dict[str, Any]:
+    def find_user_by_username(self, username: str) -> Union[Dict[str, Any], None]:
         return self.users_collection.find_one({"username": username})
 
     def upload_file(self, file_document: dict) -> Union[str, None]:

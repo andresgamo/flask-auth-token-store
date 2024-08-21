@@ -106,43 +106,33 @@ class UserRegister(Resource):
     def __init__(self, data_validation: DataValidation) -> None:
         self.data_validation = data_validation
 
+    def _response(self, message, status_code):
+        return make_response(jsonify({"message": message}), status_code)
+
+    def _hash_password(self, password):
+        return self.data_validation.bcrypt.generate_password_hash(password).decode(
+            "utf-8"
+        )
+
     def post(self):
         try:
             data = request.get_json()
-            if self.data_validation.data_complete(data):
-                username = data.get("username")
-                password = data.get("password")
-                if not self.data_validation.db_manager.find_user_by_username(username):
-                    hashed_password = (
-                        self.data_validation.bcrypt.generate_password_hash(
-                            password
-                        ).decode("utf-8")
-                    )
-                    if self.data_validation.db_manager.insert_user(
-                        username, hashed_password
-                    ):
-                        return make_response(
-                            jsonify({"message": "User registered successfully"}), 201
-                        )
+            if not self.data_validation.data_complete(data):
+                return self._response("missing user or password", 400)
+            username = data.get("username")
+            password = data.get("password")
+            if self.data_validation.db_manager.find_user_by_username(username):
+                return self._response("User already exists", 409)
 
-                    else:
-                        return make_response(
-                            jsonify({"message": "something went wrong"}), 500
-                        )
+            hashed_password = self._hash_password(password)
 
-                else:
-                    return make_response(
-                        jsonify({"message": "User already exists"}), 409
-                    )
-
-            else:
-                return make_response(
-                    jsonify({"message": "missing user or password"}), 400
-                )
+            if self.data_validation.db_manager.insert_user(username, hashed_password):
+                return self._response("User registered successfully", 201)
+            return self._response("something went wrong", 500)
 
         except Exception as e:
             logger.error("Error: %s", e)
-            return make_response(jsonify({"message": "something went wrong"}), 500)
+            return self._response("something went wrong", 500)
 
 
 db_manager = DatabaseManager()
