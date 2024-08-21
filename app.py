@@ -27,38 +27,57 @@ class Upload(Resource):
     def __init__(self, db_manager: DatabaseManager) -> None:
         self.db_manager = db_manager
 
+    def _response(self, message, status_code, **kwargs):
+        response = {"message": message}
+        response.update(kwargs)
+        return make_response(jsonify(response), status_code)
+
+    def _generate_file_document(self, file):
+        filename = secure_filename(file.filename)
+        file_data = file.read()
+        file_document = {
+            "filename": filename,
+            "file_data": file_data,
+            "content_type": file.content_type,
+        }
+        return file_document
+
     @token_required
     def post(self):
-        if "file" in request.files and "username" in request.form:
+        try:
+            if not "file" in request.files and not "username" in request.form:
+                return self._response("no file or username part", 400)
+
             current_user = request.form["username"]
             file = request.files["file"]
+
             if file.filename == "":
-                return make_response(jsonify({"message": "no file submitted"}), 401)
-            if self.allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                file_data = file.read()
-                file_document = {
-                    "filename": filename,
-                    "file_data": file_data,
-                    "content_type": file.content_type,
-                }
-                upload_id = db_manager.upload_file(file_document)
-                if upload_id:
-                    if db_manager.add_file_id(current_user, upload_id):
-                        logger.info("Upload successfully")
-                        return make_response(
-                            jsonify({"message": "Upload successfully"}), 201
-                        )
-                    logger.error("User not found or upload_id could not be added.")
-                    return make_response(
-                        jsonify(
-                            {
-                                "message": "User not found or upload_id could not be added."
-                            }
-                        ),
-                        401,
-                    )
-        return make_response(jsonify({"message": "no file part"}), 401)
+                return self._response("no file submitted", 400)
+
+            if not self.allowed_file(file.filename):
+                return self._response("File extension not supported", 400)
+
+            file_document = self._generate_file_document(file)
+            upload_id = self.db_manager.upload_file(file_document)
+
+            if not upload_id:
+                logger.error("Failed to upload file for user '%s'.", current_user)
+                return self._response("File upload failed", 500)
+
+            if self.db_manager.add_file_id(current_user, upload_id):
+                logger.info(
+                    "File '%s' successfully uploaded for user '%s'.",
+                    file.filename,
+                    current_user,
+                )
+                return self._response("Upload successful", 201)
+
+            logger.error("Failed to add upload_id to user.")
+            return self._response("Failed to add upload_id to user.", 500)
+
+        except Exception as e:
+            logger.error("Error: %s", e)
+            return self._response("something went wrong", 500)
 
     @staticmethod
     def allowed_file(filename: str) -> bool:
@@ -72,42 +91,48 @@ class UserLogin(Resource):
     def __init__(self, data_validation: DataValidation) -> None:
         self.data_validation = data_validation
 
+    def _response(self, message, status_code, **kwargs):
+        response = {"message": message}
+        response.update(kwargs)
+        return make_response(jsonify(response), status_code)
+
+    def _generate_token(self, username) -> None:
+        return jwt.encode(
+            {"username": username}, app.config["SECRET_KEY"], algorithm="HS256"
+        )
+
     def post(self):
         try:
             data = request.get_json()
-            if self.data_validation.data_complete(data):
-                username = data.get("username")
-                password = data.get("password")
-                user = self.data_validation.check_login(username, password)
-                if user:
-                    user["token"] = jwt.encode(
-                        {"username": user["username"]},
-                        app.config["SECRET_KEY"],
-                        algorithm="HS256",
-                    )
-                    user = serialize_document(user)
-                    return make_response(
-                        jsonify({"message": "access granted", "user": user}), 200
-                    )
-                else:
-                    return make_response(
-                        jsonify({"message": "wrong username or password"}), 401
-                    )
-            else:
-                return make_response(
-                    jsonify({"message": "missing user or password"}), 400
-                )
+            if not self.data_validation.data_complete(data):
+                return self._response("missing user or password", 400)
+
+            username = data.get("username")
+            password = data.get("password")
+            user = self.data_validation.check_login(username, password)
+
+            if not user:
+                return self._response("wrong username or password", 401)
+
+            user["token"] = self._generate_token(username)
+
+            user = serialize_document(user)
+
+            return self._response("access granted", 200, user=user)
+
         except Exception as e:
             logger.error("Error: %s", e)
-            return make_response(jsonify({"message": "something went wrong"}), 500)
+            return self._response("something went wrong", 500)
 
 
 class UserRegister(Resource):
     def __init__(self, data_validation: DataValidation) -> None:
         self.data_validation = data_validation
 
-    def _response(self, message, status_code):
-        return make_response(jsonify({"message": message}), status_code)
+    def _response(self, message, status_code, **kwargs):
+        response = {"message": message}
+        response.update(kwargs)
+        return make_response(jsonify(response), status_code)
 
     def _hash_password(self, password):
         return self.data_validation.bcrypt.generate_password_hash(password).decode(
