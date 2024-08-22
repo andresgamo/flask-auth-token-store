@@ -5,7 +5,8 @@ from flask_restful import Api, Resource
 from werkzeug.utils import secure_filename
 import jwt
 from flask_bcrypt import Bcrypt
-from data_validation import DataValidation
+from data_validation import DataValidation, is_data_complete
+from schemas import UserRegisterSchema
 from db_manager import DatabaseManager
 from auth_middelware import token_required
 from utility import serialize_document
@@ -13,7 +14,6 @@ from utility import serialize_document
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 app = Flask(__name__)
 SECRET_KEY = os.environ.get("SECRET_KEY")
 app.config["SECRET_KEY"] = SECRET_KEY
@@ -138,7 +138,7 @@ class UserRegister(Resource):
         return self.data_validation.bcrypt.generate_password_hash(password).decode(
             "utf-8"
         )
-
+    @is_data_complete(UserRegisterSchema)
     def post(self):
         try:
             data = request.get_json()
