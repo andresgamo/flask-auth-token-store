@@ -6,7 +6,7 @@ from werkzeug.utils import secure_filename
 import jwt
 from flask_bcrypt import Bcrypt
 from data_validation import DataValidation, is_data_complete
-from schemas import UserRegisterSchema
+from schemas import UserRegisterSchema, UploadFileSchema
 from db_manager import DatabaseManager
 from auth_middelware import token_required
 from utility import serialize_document
@@ -43,16 +43,11 @@ class Upload(Resource):
         return file_document
 
     @token_required
+    @is_data_complete(UploadFileSchema())
     def post(self):
         try:
-            if not "file" in request.files and not "username" in request.form:
-                return self._response("no file or username part", 400)
-
             current_user = request.form["username"]
             file = request.files["file"]
-
-            if file.filename == "":
-                return self._response("no file submitted", 400)
 
             if not self.allowed_file(file.filename):
                 return self._response("File extension not supported", 400)
@@ -101,12 +96,10 @@ class UserLogin(Resource):
             {"username": username}, app.config["SECRET_KEY"], algorithm="HS256"
         )
 
+    @is_data_complete(UserRegisterSchema())
     def post(self):
         try:
             data = request.get_json()
-            if not self.data_validation.data_complete(data):
-                return self._response("missing user or password", 400)
-
             username = data.get("username")
             password = data.get("password")
             user = self.data_validation.check_login(username, password)
@@ -138,14 +131,14 @@ class UserRegister(Resource):
         return self.data_validation.bcrypt.generate_password_hash(password).decode(
             "utf-8"
         )
-    @is_data_complete(UserRegisterSchema)
+
+    @is_data_complete(UserRegisterSchema())
     def post(self):
         try:
             data = request.get_json()
-            if not self.data_validation.data_complete(data):
-                return self._response("missing user or password", 400)
             username = data.get("username")
             password = data.get("password")
+
             if self.data_validation.db_manager.find_user_by_username(username):
                 return self._response("User already exists", 409)
 
@@ -168,4 +161,4 @@ api.add_resource(Upload, "/upload", resource_class_args=(db_manager,))
 
 
 if "__main__" == __name__:
-    app.run(host="0.0.0.0", port=8000)
+    app.run(host="0.0.0.0", port=8000, debug=True)

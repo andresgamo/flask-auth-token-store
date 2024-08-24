@@ -3,9 +3,7 @@ from functools import wraps
 from marshmallow import ValidationError
 from flask import request, make_response, jsonify
 from flask_bcrypt import Bcrypt
-from schemas import UserRegisterSchema
 from db_manager import DatabaseManager
-
 
 class DataValidation:
     def __init__(self, db_manager: DatabaseManager, bcrypt: Bcrypt):
@@ -18,10 +16,6 @@ class DataValidation:
         response.update(kwargs)
         return make_response(jsonify(response), status_code)
 
-    def data_complete(self, data: dict) -> bool:
-        """Validates user and password have been sent"""
-        return bool(data.get("username")) and bool(data.get("password"))
-
     def verify_password(self, user, password: str) -> bool:
         """Verify if the provided password matches the stored hash"""
         return self.bcrypt.check_password_hash(user.get("password"), password)
@@ -32,15 +26,24 @@ class DataValidation:
             return user
         return False
 
-def is_data_complete(schema: UserRegisterSchema):
+
+def is_data_complete(schema):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
-                data = request.get_json()
+                if request.is_json:
+                    data = request.get_json()
+                else:
+                    data = request.form.to_dict()
+                if "file" in request.files:
+                    data["file"] = request.files["file"]
                 schema.load(data)
             except ValidationError as err:
-                return DataValidation.response("Missing parameters", 401, error=err)
+                errors = err.messages
+                return DataValidation.response(
+                    "Missing or invalid parameters", 401, error=errors
+                )
             return func(*args, **kwargs)
 
         return wrapper
