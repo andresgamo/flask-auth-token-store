@@ -5,6 +5,7 @@ from flask import request, make_response, jsonify
 from flask_bcrypt import Bcrypt
 from db_manager import DatabaseManager
 
+
 class DataValidation:
     def __init__(self, db_manager: DatabaseManager, bcrypt: Bcrypt):
         self.db_manager = db_manager
