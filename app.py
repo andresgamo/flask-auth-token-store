@@ -22,7 +22,6 @@ bcrypt = Bcrypt(app)
 
 
 class Upload(Resource):
-    ALLOWED_EXTENSIONS = {"txt", "pdf", "png", "jpg", "jpeg", "gif"}
 
     def __init__(self, db_manager: DatabaseManager) -> None:
         self.db_manager = db_manager
@@ -48,10 +47,6 @@ class Upload(Resource):
         try:
             current_user = request.form["username"]
             file = request.files["file"]
-
-            if not self.allowed_file(file.filename):
-                return self._response("File extension not supported", 400)
-
             file_document = self._generate_file_document(file)
             upload_id = self.db_manager.upload_file(file_document)
 
@@ -73,13 +68,6 @@ class Upload(Resource):
         except Exception as e:
             logger.error("Error: %s", e)
             return self._response("something went wrong", 500)
-
-    @staticmethod
-    def allowed_file(filename: str) -> bool:
-        return (
-            "." in filename
-            and filename.rsplit(".", 1)[1].lower() in Upload.ALLOWED_EXTENSIONS
-        )
 
 
 class UserLogin(Resource):
